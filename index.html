@@ -493,15 +493,23 @@
                     // [步驟 1] 如果你有 Firebase 設定檔，請把下面的 null 取代為你的設定
                     // 範例：
                     // const myFirebaseConfig = {
-                    //   apiKey: "AIzaSyA6z0qqQcn_Z2TvcOmy-lngeyRk71obZhc",
-                    //   authDomain: "travel-ab0e2.firebaseapp.com",
-                    //   projectId: "travel-ab0e2",
-                    //   storageBucket: "travel-ab0e2.firebasestorage.app",
-                    //   messagingSenderId: "G-QDEH6KKR0Y",
-                    //   appId: "1:492992766378:web:6a69927885c56a567a4bd3"
+                    //   apiKey: "AIzaSy...",
+                    //   authDomain: "myapp.firebaseapp.com",
+                    //   projectId: "myapp",
+                    //   storageBucket: "myapp.firebasestorage.app",
+                    //   messagingSenderId: "123456",
+                    //   appId: "1:123456:web:..."
                     // };
                     
-                    const myFirebaseConfig = null; 
+                    const myFirebaseConfig = {
+                      apiKey: "AIzaSyA6z0qqQcn_Z2TvcOmy-lngeyRk71obZhc",
+                      authDomain: "travel-ab0e2.firebaseapp.com",
+                      projectId: "travel-ab0e2",
+                      storageBucket: "travel-ab0e2.firebasestorage.app",
+                      messagingSenderId: "492992766378",
+                      appId: "1:492992766378:web:6a69927885c56a567a4bd3",
+                      measurementId: "G-QDEH6KKR0Y"
+                    };
                     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
                     if (myFirebaseConfig) {
@@ -523,7 +531,11 @@
                             
                             // Auth Flow
                             const initAuth = async () => {
-                                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                // 如果使用了自定義設定 (myFirebaseConfig)，就不要使用環境提供的 Token (因為那是給預設專案用的)
+                                // 直接使用匿名登入
+                                if (myFirebaseConfig) {
+                                    await signInAnonymously(auth);
+                                } else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                     await signInWithCustomToken(auth, __initial_auth_token);
                                 } else {
                                     await signInAnonymously(auth);
