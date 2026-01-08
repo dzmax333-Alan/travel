@@ -61,7 +61,7 @@
             </div>
         </div>
 
-        <!-- Migration Alert (New Feature) -->
+        <!-- Migration Alert -->
         <div v-if="showMigrationAlert" class="absolute top-20 left-4 right-4 z-30 bg-orange-500 text-white p-4 rounded-xl shadow-xl border-2 border-orange-400 animate-fade-in">
             <div class="flex items-start gap-3">
                 <i class="ph-fill ph-warning-circle text-2xl mt-0.5"></i>
@@ -377,6 +377,15 @@
                         <h2 class="text-xl font-bold text-slate-800">我的旅程</h2>
                         <button @click="showTripMenu = false" class="text-slate-400 hover:text-slate-600"><i class="ph-bold ph-x text-xl"></i></button>
                     </div>
+                    
+                    <!-- 跨裝置同步設定 (新增) -->
+                    <div class="bg-teal-50 rounded-xl p-4 mb-4 border border-teal-100">
+                        <h3 class="text-xs font-bold text-teal-600 mb-2 flex items-center gap-1"><i class="ph-bold ph-arrows-left-right"></i> 跨裝置同步</h3>
+                        <div class="text-[10px] text-slate-500 mb-2">在手機/電腦輸入相同的 ID 即可同步。</div>
+                        <input v-model.lazy="syncId" placeholder="設定您的同步ID (例如: alan2026)" class="w-full text-sm border border-teal-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white">
+                        <div v-if="syncId" class="text-[10px] text-green-600 mt-1 flex items-center gap-1"><i class="ph-bold ph-check-circle"></i> 目前使用 ID: {{ syncId }}</div>
+                    </div>
+
                     <button @click="createNewTrip" class="w-full py-3 mb-3 border-2 border-dashed border-teal-400 text-teal-600 rounded-xl font-bold hover:bg-teal-50 flex items-center justify-center gap-2">
                         <i class="ph-bold ph-plus-circle"></i> 建立新旅程
                     </button>
@@ -422,7 +431,7 @@
                     <div class="mt-4 pt-4 border-t border-slate-100 text-[10px] text-slate-300 font-mono break-all">
                         <div>DEBUG: {{ debugMsg }}</div>
                         <div v-if="user">UID: {{ user.uid.slice(0,5) }}...</div>
-                        <div>AppID: {{ fixedAppId }}</div>
+                        <div>Storage: {{ storageUserId ? (storageUserId.startsWith('custom_') ? 'Custom' : 'Private') : 'Local' }}</div>
                     </div>
                 </div>
                 <div class="flex-1 bg-black/50 backdrop-blur-sm z-40" @click="showTripMenu = false"></div>
@@ -486,6 +495,14 @@
                 const isUploading = ref(false); 
                 const debugMsg = ref('Initializing...');
                 const fixedAppId = 'my-travel-plan'; // Fixed ID to prevent path issues
+                
+                // NEW: Sync ID Logic
+                const syncId = ref(localStorage.getItem('travel_app_sync_id') || '');
+                const storageUserId = computed(() => {
+                    // If user provides a sync ID, prioritize it. Otherwise use their private auth UID.
+                    if (syncId.value && syncId.value.trim() !== '') return 'custom_' + syncId.value.trim();
+                    return user.value ? user.value.uid : null;
+                });
 
                 // --- App State ---
                 const viewMode = ref('plan');
@@ -498,7 +515,7 @@
                 const showTripMenu = ref(false);
                 const currentTripId = ref(null);
                 const showSetupModal = ref(false);
-                const showMigrationAlert = ref(false); // Alert visibility
+                const showMigrationAlert = ref(false); 
                 
                 // Fallback for offline (moved up)
                 const localTripList = ref([]);
@@ -606,8 +623,12 @@
 
                 // --- Sync Logic (Firestore) ---
                 const syncTrips = () => {
-                    if (!user.value || !db.value) return;
-                    const q = collection(db.value, 'artifacts', fixedAppId, 'users', user.value.uid, 'trips');
+                    if (!user.value || !db.value || !storageUserId.value) return;
+                    
+                    // Unsub previous if re-syncing
+                    if (tripSnapshotUnsub) tripSnapshotUnsub();
+
+                    const q = collection(db.value, 'artifacts', fixedAppId, 'users', storageUserId.value, 'trips');
                     
                     tripSnapshotUnsub = onSnapshot(q, (snapshot) => {
                         const trips = [];
@@ -618,19 +639,16 @@
                         isGlobalLoading.value = false;
                         debugMsg.value = `Synced: ${trips.length} trips`;
 
-                        // If no current trip selected, select first
+                        // Logic for "First Load" vs "Updates"
                         if (!currentTripId.value && trips.length > 0) {
-                            // Sort by date desc
                             const sorted = trips.sort((a,b) => new Date(b.config.startDate) - new Date(a.config.startDate));
                             loadTripDataFromDoc(sorted[0]);
-                        } else if (currentTripId.value) {
-                            // If currently viewing a trip, maintain state
                         } else if (trips.length === 0) {
-                            // ★★★ CRITICAL FIX: If cloud is empty but local has data, prompt user! ★★★
-                            if (localTripList.value.length > 0) {
+                            // If cloud empty & local has data & we are NOT using a custom sync ID (fresh private user)
+                            if (localTripList.value.length > 0 && !syncId.value) {
                                 showMigrationAlert.value = true;
                                 debugMsg.value = 'Cloud empty, local data found';
-                            } else {
+                            } else if (localTripList.value.length === 0) {
                                 showSetupModal.value = true;
                             }
                         }
@@ -655,12 +673,12 @@
                         updatedAt: new Date().toISOString()
                     };
 
-                    if (user.value && db.value) {
+                    if (user.value && db.value && storageUserId.value) {
                         // Firestore Save
                         if (saveTimeout) clearTimeout(saveTimeout);
                         saveTimeout = setTimeout(async () => {
                             try {
-                                const tripRef = doc(db.value, 'artifacts', fixedAppId, 'users', user.value.uid, 'trips', currentTripId.value);
+                                const tripRef = doc(db.value, 'artifacts', fixedAppId, 'users', storageUserId.value, 'trips', currentTripId.value);
                                 await setDoc(tripRef, tripData);
                                 hasUnsavedChanges.value = false;
                                 debugMsg.value = 'Saved to Cloud';
@@ -690,7 +708,7 @@
                 
                 // --- Upload Local to Cloud Function ---
                 const uploadLocalToCloud = async () => {
-                    if (!user.value || !db.value || localTripList.value.length === 0) return;
+                    if (!user.value || !db.value || localTripList.value.length === 0 || !storageUserId.value) return;
                     
                     isUploading.value = true;
                     debugMsg.value = 'Uploading...';
@@ -717,7 +735,7 @@
                                     updatedAt: new Date().toISOString()
                                 };
                                 
-                                await setDoc(doc(db.value, 'artifacts', fixedAppId, 'users', user.value.uid, 'trips', id), tripData);
+                                await setDoc(doc(db.value, 'artifacts', fixedAppId, 'users', storageUserId.value, 'trips', id), tripData);
                                 successCount++;
                             }
                         }
@@ -746,6 +764,15 @@
                 watch([days, expenses, exchangeRate, participantsStr, setup], () => {
                      saveTripData();
                 }, { deep: true });
+                
+                // Watch for Sync ID changes
+                watch(syncId, (newVal) => {
+                    localStorage.setItem('travel_app_sync_id', newVal);
+                    if (user.value) {
+                        isGlobalLoading.value = true;
+                        syncTrips(); // Reload data from new ID path
+                    }
+                });
 
                 // --- Trip Management Helpers ---
                 const loadLocalTrips = () => {
@@ -838,8 +865,8 @@
                 const deleteTrip = async (id) => {
                     if(!confirm('確定刪除此行程？無法復原。')) return;
                     
-                    if (user.value && db.value) {
-                         await deleteDoc(doc(db.value, 'artifacts', fixedAppId, 'users', user.value.uid, 'trips', id));
+                    if (user.value && db.value && storageUserId.value) {
+                         await deleteDoc(doc(db.value, 'artifacts', fixedAppId, 'users', storageUserId.value, 'trips', id));
                     } else {
                         localTripList.value = localTripList.value.filter(t => t.id !== id);
                         localStorage.setItem('travel_app_index', JSON.stringify(localTripList.value));
@@ -1081,7 +1108,8 @@
                     searchNearby, recommendationsMap, isSearchingRecs, applyRecommendation, searchTargetIndex,
                     exportTrip, handleImport, user, hasUnsavedChanges,
                     localTripList, uploadLocalToCloud, isUploading,
-                    showMigrationAlert, dismissMigration, debugMsg, fixedAppId
+                    showMigrationAlert, dismissMigration, debugMsg, fixedAppId,
+                    syncId, storageUserId // Export new state
                 };
             }
         }).mount('#app')
