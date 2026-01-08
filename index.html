@@ -218,9 +218,14 @@
                                                 <i class="ph-fill ph-map-pin text-teal-400 text-xs"></i>
                                                 <input v-model="item.location" class="flex-1 text-xs text-slate-500 bg-transparent border-none p-0 focus:ring-0 truncate" placeholder="輸入地點 (例如: 新宿)">
                                             </div>
-                                            <div class="flex items-center gap-1 mt-1">
-                                                <i class="ph-bold ph-info text-orange-400 text-xs"></i>
-                                                <input v-model="item.note" class="flex-1 text-xs text-orange-600/90 bg-transparent border-none p-0 focus:ring-0 truncate" placeholder="備註">
+                                            <div class="flex items-start gap-1 mt-1">
+                                                <i class="ph-bold ph-info text-orange-400 text-xs mt-0.5"></i>
+                                                <textarea v-model="item.note" 
+                                                          class="flex-1 text-xs text-orange-600/90 bg-transparent border-none p-0 focus:ring-0 resize-none overflow-hidden leading-normal" 
+                                                          placeholder="備註" 
+                                                          rows="1" 
+                                                          @input="$event.target.style.height = 'auto'; $event.target.style.height = $event.target.scrollHeight + 'px'"
+                                                          style="min-height: 1.25rem;"></textarea>
                                             </div>
                                         </div>
                                         <div class="flex flex-col gap-2">
