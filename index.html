@@ -102,6 +102,13 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
+                    <!-- 筆記按鈕 (New) -->
+                    <button @click="showNotesModal = true" 
+                            class="p-2.5 rounded-xl transition-all h-11 w-11 flex items-center justify-center border border-teal-500/30 bg-teal-500/30 text-teal-200 hover:bg-teal-500/50 hover:text-white">
+                        <i class="ph-bold ph-notebook text-xl"></i>
+                    </button>
+
+                    <!-- 翻譯功能按鈕 -->
                     <button @click="viewMode = 'translate'" 
                             :class="viewMode === 'translate' ? 'bg-white text-teal-700 shadow-sm' : 'bg-teal-500/30 text-teal-200 hover:bg-teal-500/50'"
                             class="p-2.5 rounded-xl transition-all h-11 w-11 flex items-center justify-center border border-teal-500/30">
@@ -446,6 +453,42 @@
             </div>
         </transition>
 
+        <!-- 隨身筆記 Modal (New) -->
+        <div v-if="showNotesModal" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+                <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-teal-600 rounded-t-2xl text-white">
+                    <h3 class="font-bold text-lg flex items-center gap-2"><i class="ph-bold ph-notebook"></i> 隨身筆記</h3>
+                    <button @click="showNotesModal = false" class="hover:bg-white/20 p-1 rounded-full"><i class="ph-bold ph-x text-xl"></i></button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                    <div v-if="notes.length === 0" class="text-center text-slate-400 py-8">
+                        <i class="ph-duotone ph-notebook text-4xl mb-2"></i>
+                        <p class="text-sm">尚無筆記，點擊下方新增</p>
+                    </div>
+                    
+                    <div v-for="(note, idx) in notes" :key="note.id" class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden group">
+                        <div class="p-3 border-b border-slate-50 flex items-center gap-2">
+                            <input v-model="note.title" placeholder="標題 (如: 入境卡)" class="font-bold text-slate-700 bg-transparent border-none p-0 focus:ring-0 w-full text-sm">
+                            <button @click="deleteNote(idx)" class="text-slate-300 hover:text-red-500 p-1"><i class="ph-bold ph-trash"></i></button>
+                        </div>
+                        <div class="p-3">
+                            <textarea v-model="note.content" 
+                                      v-auto-resize
+                                      placeholder="在此輸入內容..." 
+                                      class="w-full text-sm text-slate-600 bg-transparent border-none p-0 focus:ring-0 resize-none leading-relaxed min-h-[4rem]"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 border-t border-slate-100 bg-white rounded-b-2xl">
+                    <button @click="addNote" class="w-full py-3 bg-teal-50 border-2 border-dashed border-teal-200 text-teal-600 rounded-xl font-bold hover:bg-teal-100 transition flex items-center justify-center gap-2">
+                        <i class="ph-bold ph-plus-circle"></i> 新增筆記
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- 初始設定視窗 -->
         <div v-if="showSetupModal" class="absolute inset-0 bg-teal-800/90 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in">
             <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
@@ -524,6 +567,7 @@
                 const currentTripId = ref(null);
                 const showSetupModal = ref(false);
                 const showMigrationAlert = ref(false); 
+                const showNotesModal = ref(false); // New: Notes Modal State
                 
                 // Fallback for offline (moved up)
                 const localTripList = ref([]);
@@ -543,6 +587,7 @@
                 const participantsStr = ref('我, 旅伴A');
                 const exchangeRate = ref(0.215);
                 const newExpense = ref({ item: '', amount: '', payer: '我' });
+                const notes = ref([]); // New: Notes Data
                 
                 // Temp & Config
                 const isRateLoading = ref(false);
@@ -678,6 +723,7 @@
                         expenses: expenses.value,
                         participantsStr: participantsStr.value,
                         rate: exchangeRate.value,
+                        notes: notes.value, // New: Save notes
                         updatedAt: new Date().toISOString()
                     };
 
@@ -705,6 +751,7 @@
                         localStorage.setItem(`${currentTripId.value}_users`, participantsStr.value);
                         localStorage.setItem(`${currentTripId.value}_rate`, exchangeRate.value.toString());
                         localStorage.setItem(`${currentTripId.value}_config`, JSON.stringify(setup.value));
+                        localStorage.setItem(`${currentTripId.value}_notes`, JSON.stringify(notes.value)); // New: Save local
                         
                         const idx = localTripList.value.findIndex(t => t.id === currentTripId.value);
                         if(idx >= 0) localTripList.value[idx] = tripData.meta;
@@ -731,6 +778,7 @@
                             const lUsers = localStorage.getItem(`${id}_users`);
                             const lRate = localStorage.getItem(`${id}_rate`);
                             const lConf = localStorage.getItem(`${id}_config`);
+                            const lNotes = localStorage.getItem(`${id}_notes`); // New: Load notes
 
                             if (lDays && lConf) {
                                 const tripData = {
@@ -740,6 +788,7 @@
                                     expenses: lExp ? JSON.parse(lExp) : [],
                                     participantsStr: lUsers || '我, 旅伴A',
                                     rate: lRate ? parseFloat(lRate) : 0.215,
+                                    notes: lNotes ? JSON.parse(lNotes) : [], // New: Upload notes
                                     updatedAt: new Date().toISOString()
                                 };
                                 
@@ -769,7 +818,7 @@
                 };
 
                 // --- Watchers for Auto Save ---
-                watch([days, expenses, exchangeRate, participantsStr, setup], () => {
+                watch([days, expenses, exchangeRate, participantsStr, setup, notes], () => {
                      saveTripData();
                 }, { deep: true });
                 
@@ -799,6 +848,7 @@
                     participantsStr.value = tripDoc.participantsStr || '';
                     exchangeRate.value = tripDoc.rate || 0;
                     setup.value = tripDoc.config || {};
+                    notes.value = tripDoc.notes || []; // New: Load notes
                     updateParticipants();
                     fetchWeather(setup.value.destination);
                 };
@@ -821,6 +871,8 @@
                         const lUsers = localStorage.getItem(`${id}_users`);
                         const lRate = localStorage.getItem(`${id}_rate`);
                         const lConf = localStorage.getItem(`${id}_config`);
+                        const lNotes = localStorage.getItem(`${id}_notes`); // New: Load local notes
+                        
                         if(lDays) days.value = JSON.parse(lDays);
                         if(lExp) expenses.value = JSON.parse(lExp);
                         if(lUsers) { participantsStr.value = lUsers; updateParticipants(); }
@@ -829,6 +881,7 @@
                             setup.value = JSON.parse(lConf);
                             fetchWeather(setup.value.destination);
                         }
+                        if(lNotes) notes.value = JSON.parse(lNotes); else notes.value = []; // New
                     }
                 };
 
@@ -865,6 +918,7 @@
                     expenses.value = [];
                     participantsStr.value = '我, 旅伴A';
                     exchangeRate.value = setup.value.rate;
+                    notes.value = []; // New
                     
                     saveTripData(); // Will trigger Firestore create
                     showSetupModal.value = false;
@@ -879,11 +933,13 @@
                         localTripList.value = localTripList.value.filter(t => t.id !== id);
                         localStorage.setItem('travel_app_index', JSON.stringify(localTripList.value));
                         localStorage.removeItem(`${id}_days`);
+                        localStorage.removeItem(`${id}_notes`); // New
                     }
 
                     if(currentTripId.value === id) {
                         currentTripId.value = null;
                         days.value = [];
+                        notes.value = []; // New
                         if (tripList.value.length > 0) switchTrip(tripList.value[0].id);
                         else {
                              if(localTripList.value.length === 0) showSetupModal.value = true;
@@ -966,6 +1022,18 @@
                 const getGoogleMapLink = (loc) => loc ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}` : '#';
                 const addExpense = () => { if(newExpense.value.item) { expenses.value.unshift({...newExpense.value}); newExpense.value.item=''; newExpense.value.amount=''; saveTripData(); }};
                 const removeExpense = (idx) => { expenses.value.splice(idx, 1); saveTripData(); };
+                
+                // Notes Functions (New)
+                const addNote = () => {
+                    notes.value.push({ id: Date.now(), title: '', content: '' });
+                    saveTripData();
+                };
+                const deleteNote = (idx) => {
+                    if(confirm('確定刪除此筆記？')) {
+                        notes.value.splice(idx, 1);
+                        saveTripData();
+                    }
+                };
 
                 // --- LBS Recs ---
                 const searchNearby = async (item, idx) => {
@@ -1128,7 +1196,8 @@
                     exportTrip, handleImport, user, hasUnsavedChanges,
                     localTripList, uploadLocalToCloud, isUploading,
                     showMigrationAlert, dismissMigration, debugMsg, fixedAppId,
-                    syncId, storageUserId, sortCurrentDayItems // Added new function
+                    syncId, storageUserId, sortCurrentDayItems,
+                    showNotesModal, notes, addNote, deleteNote // New Exports
                 };
             }
         });
