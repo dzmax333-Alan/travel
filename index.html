@@ -202,7 +202,10 @@
                                             <div class="relative flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-xl p-1 w-full h-16 cursor-pointer hover:bg-teal-50 hover:border-teal-200 transition group/time">
                                                 <span class="text-[10px] font-medium text-slate-400 group-hover/time:text-teal-400">{{ getTimePeriod(item.time) }}</span>
                                                 <span class="text-xl font-bold text-slate-700 group-hover/time:text-teal-600 leading-none font-mono tracking-tight">{{ item.time || '--:--' }}</span>
-                                                <input v-model="item.time" type="time" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                                                <input v-model="item.time" 
+                                                       @change="sortCurrentDayItems"
+                                                       type="time" 
+                                                       class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
                                             </div>
                                             <select v-model="item.type" class="text-[10px] bg-white border border-slate-200 rounded-md py-1 px-1 w-full text-center">
                                                 <option value="spot">📍 景點</option>
@@ -1074,6 +1077,17 @@
                     reader.readAsText(file);
                 };
 
+                // --- Sort Function (New) ---
+                const sortCurrentDayItems = () => {
+                    currentDay.value.items.sort((a, b) => {
+                        // Logic: Items with time go to top (sorted), items without time go to bottom
+                        if (!a.time && !b.time) return 0;
+                        if (!a.time) return 1; // a has no time, put after b
+                        if (!b.time) return -1; // b has no time, put after a
+                        return a.time.localeCompare(b.time);
+                    });
+                };
+
                 // Map Init
                 const initMap = async () => { 
                     isMapLoading.value = true; await nextTick(); if (!document.getElementById('map')) return;
@@ -1114,7 +1128,7 @@
                     exportTrip, handleImport, user, hasUnsavedChanges,
                     localTripList, uploadLocalToCloud, isUploading,
                     showMigrationAlert, dismissMigration, debugMsg, fixedAppId,
-                    syncId, storageUserId // Export new state
+                    syncId, storageUserId, sortCurrentDayItems // Added new function
                 };
             }
         });
